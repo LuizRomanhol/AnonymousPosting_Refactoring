@@ -2,10 +2,25 @@ from flask import Flask, render_template, request, redirect, url_for
 from datetime import datetime
 
 messages = []
+filtered_messages = []
 max_messages = 10
 previous_search = None
-filtered_messages = []
 
+class Post:
+    def __init__(self, id, name, post, timestamp, categories):
+        self.id = id
+        self.name = name
+        self.post = post
+        self.timestamp = timestamp
+        self.categories = categories
+        self.comments = []
+
+class Comment:
+    def __init__(self, parent_id, comment, timestamp,):
+        self.parent_id = parent_id
+        self.comment = comment
+        self.timestamp = timestamp
+        
 def create_app():
     app = Flask(__name__)
 
@@ -16,7 +31,7 @@ def create_app():
     def politics():
         return render_template('policies.html')
 
-    @app.route('/', methods=['GET'])
+    @app.route('/', methods=['GET'],)
     def index_get():
         global previous_search
         error_message = ""
@@ -24,7 +39,7 @@ def create_app():
         filtered_messages = filter_messages(filter_tag, previous_search)
         search_query = request.args.get('search')
         if search_query is not None and search_query.strip():
-            filtered_messages = [message for message in filtered_messages if search_query.lower() in message['post'].lower()]
+            filtered_messages = [message for message in filtered_messages if search_query.lower() in message.post.lower()]
             previous_search = search_query
             if not filtered_messages:
                 error_message = "No results found"
@@ -37,6 +52,7 @@ def create_app():
 
     @app.route('/', methods=['POST'])
     def index_post():
+        global previous_search
         error_message = ""
         filter_tag = request.form.get('filter', 'all')
         name = request.form.get('name', "")
@@ -54,41 +70,29 @@ def create_app():
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         if comment:
-            add_comment(parent_id, name, comment, filter_tag, categories)
+            add_comment(parent_id, comment)
         else:
-            add_post(name, post, timestamp, categories, [])
-        return redirect(url_for('index_get', filter=filter_tag))
+            add_post(name, post, timestamp, categories)
 
-    def add_post(name, post, timestamp, categories, comments):
-        message = {
-            'id': get_next_id(),
-            'name': name,
-            'post': post,
-            'timestamp': timestamp,
-            'categories': categories,
-            'comments': comments
-        }
+        return render_template('index.html', messages=messages[-max_messages:], categories=["Secrets", "Family", "Health", "Confession", "Other"], filter=filter_tag, search=previous_search)
+
+    def add_post(name, post, timestamp, categories):
+        message = Post(get_next_id(), name, post, timestamp, categories)
         messages.append(message)
 
-    def add_comment(parent_id, name, comment, filter_tag, categories):
+    def add_comment(parent_id, comment):
         comment_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        comment_data = {
-            'name': name,
-            'comment': comment,
-            'timestamp': comment_timestamp,
-            'filter': filter_tag,
-            'categories': categories
-        }
+        comment_data = Comment(parent_id, comment, comment_timestamp)
 
         if parent_id:
             parent_id = int(parent_id)
             if parent_id >= 0 and parent_id < len(messages):
-                messages[parent_id]['comments'].append(comment_data)
+                messages[parent_id].comments.append(comment_data)
 
     def filter_messages(filter_tag, search_query):
-        filtered_messages = [message for message in messages if filter_tag is None or filter_tag == 'all' or filter_tag in message['categories']]
+        filtered_messages = [message for message in messages if filter_tag is None or filter_tag == 'all' or filter_tag in message.categories]
         if search_query is not None and search_query.strip():
-            filtered_messages = [message for message in filtered_messages if search_query.lower() in message['post'].lower()]
+            filtered_messages = [message for message in filtered_messages if search_query.lower() in message.post.lower()]
         return filtered_messages
 
     return app
